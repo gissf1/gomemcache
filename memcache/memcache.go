@@ -709,3 +709,49 @@ func (c *Client) incrDecr(verb, key string, delta uint64) (uint64, error) {
 	})
 	return val, err
 }
+
+// parse a stats response line string to return the key/value
+func (c *Client) parseStatsResponse(line []byte) (key string, value string, err error) {
+	pattern := "STAT %s %s\r\n"
+	dest := []interface{}{&key, &value}
+	n, err := fmt.Sscanf(string(line), pattern, dest...)
+	if err != nil || n != len(dest) {
+		return key, value, fmt.Errorf("memcache: unexpected line in stats response: %q", line)
+	}
+	return key, value, nil
+}
+
+// return a map of current server stats
+func (c *Client) Stats() (map[string]string, error) {
+	var err error
+	err = nil
+	stats := make(map[string]string)
+	
+	c.withKeyRw("", func(rw *bufio.ReadWriter) error {
+		if _, err = fmt.Fprintf(rw, "stats\r\n"); err != nil {
+			return err
+		}
+		if err := rw.Flush(); err != nil {
+			return err
+		}
+		r := rw.Reader
+		for {
+			line, err := r.ReadSlice('\n')
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(line, resultEnd) {
+				break;
+			}
+			// parse line
+			key, value, err := c.parseStatsResponse(line);
+			if err != nil {
+				return err
+			}
+			stats[key] = value
+		}
+		return err
+	})
+	
+	return stats, err
+}
