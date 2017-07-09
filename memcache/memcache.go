@@ -755,3 +755,31 @@ func (c *Client) Stats() (map[string]string, error) {
 	
 	return stats, err
 }
+
+// return lines from stats command with arguments and call cb for each returned line
+func (c *Client) StatsWithArgs(args string, cb func([]byte)) error {
+	var err error
+	err = nil
+	c.withKeyRw("", func(rw *bufio.ReadWriter) error {
+		if _, err = fmt.Fprintf(rw, "stats %s\r\n", args); err != nil {
+			return err
+		}
+		if err := rw.Flush(); err != nil {
+			return err
+		}
+		r := rw.Reader
+		for {
+			line, err := r.ReadSlice('\n')
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(line, resultEnd) {
+				break;
+			}
+			cb(line)
+		}
+		cb(nil)
+		return err
+	})
+	return err
+}
