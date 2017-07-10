@@ -783,3 +783,31 @@ func (c *Client) StatsWithArgs(args string, cb func([]byte)) error {
 	})
 	return err
 }
+
+// return lines from lru_crawler command with arguments and call cb for each returned line
+func (c *Client) Lru_crawler(args string, cb func([]byte)) error {
+	var err error
+	err = nil
+	c.withKeyRw("", func(rw *bufio.ReadWriter) error {
+		if _, err = fmt.Fprintf(rw, "lru_crawler %s\r\n", args); err != nil {
+			return err
+		}
+		if err := rw.Flush(); err != nil {
+			return err
+		}
+		r := rw.Reader
+		for {
+			line, err := r.ReadSlice('\n')
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(line, resultEnd) {
+				break;
+			}
+			cb(line)
+		}
+		cb(nil)
+		return err
+	})
+	return err
+}
